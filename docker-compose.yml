@@ -1,5 +1,4 @@
 version: "3.8"
-
 volumes:
   certs:
     driver: local
@@ -10,9 +9,8 @@ volumes:
 
 networks:
   default:
-    name: elastic
+    name: elk-stack
     external: false
-
 services:
   setup:
     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
@@ -35,7 +33,7 @@ services:
         fi;
         if [ ! -f config/certs/certs.zip ]; then
           echo "Creating certs";
-          echo -ne \
+           echo -ne \
           "instances:\n"\
           "  - name: es01\n"\
           "    dns:\n"\
@@ -83,8 +81,8 @@ services:
       - ${ES_PORT}:9200
     environment:
       - node.name=es01
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g  
       - cluster.name=${CLUSTER_NAME}
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
       - discovery.type=single-node
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - bootstrap.memory_lock=true
@@ -99,6 +97,8 @@ services:
       - xpack.security.transport.ssl.certificate_authorities=certs/ca/ca.crt
       - xpack.security.transport.ssl.verification_mode=certificate
       - xpack.license.self_generated.type=${LICENSE}
+      - xpack.ml.use_auto_machine_memory_percent=true
+   
     healthcheck:
       test:
         [
@@ -113,6 +113,7 @@ services:
     depends_on:
       es01:
         condition: service_healthy
+      
     image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
     labels:
       co.elastic.logs/module: kibana
@@ -123,24 +124,25 @@ services:
       - ${KIBANA_PORT}:5601
     environment:
       - SERVERNAME=kibana
-      - ES_JAVA_OPTS=-Xms1g -Xmx1g  
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
       - ELASTICSEARCH_HOSTS=https://es01:9200
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
-      - SERVER_SSL_ENABLED=true  
+      - SERVER_SSL_ENABLED=true
       - SERVER_SSL_CERTIFICATE=config/certs/kibana/kibana.crt
-      - SERVER_SSL_KEY=config/certs/kibana/kibana.key  
+      - SERVER_SSL_KEY=config/certs/kibana/kibana.key
       - ELASTICSEARCH_SSL_CERTIFICATEAUTHORITIES=config/certs/ca/ca.crt
       - XPACK_SECURITY_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${ENCRYPTION_KEY}
       - XPACK_REPORTING_ENCRYPTIONKEY=${ENCRYPTION_KEY}
-    mem_limit: ${KB_MEM_LIMIT}
+    
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          "curl -s -I --cacert config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/1.1 302 Found'",
+           "curl -s -I --cacert /usr/share/kibana/config/certs/ca/ca.crt https://localhost:5601 | grep -q 'HTTP/2 302'",
         ]
       interval: 10s
       timeout: 10s
-      retries: 120
+      retries: 120    
+
